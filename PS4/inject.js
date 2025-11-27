@@ -289,31 +289,7 @@ class gadgets {
                     break;
 
                 case 'Pollux-U53-7-J':        // PS4 JP 1.53
-                    is_ps4 = true;
-                    /** Gadgets for Function Arguments (EBOOT) **/
-                    this.pop_rax = 0x118dn;
-                    this.pop_rdi = 0xe333n;
-                    this.pop_rsi = 0x264en;
-                    this.pop_rdx = 0x5ff5cfn;
-                    this.pop_rcx = 0x18a7n;
-                    this.pop_r8 = 0x118cn;
-                    this.pop_r9 = 0x7416n;
                     
-                    /** Other Gadgets **/
-                    this.pop_rbp = 0x79n;
-                    this.pop_rbx = 0x2666n;
-                    this.pop_rsp = 0x569bn;
-                    this.pop_rsp_pop_rbp = 0x60a30n;
-                    this.mov_qword_ptr_rsi_rax = 0x2e93c1n;// mov qword ptr [rsi], rax ; ret
-                    this.mov_qword_ptr_rdi_rdx = 0x7b83a9n;
-                    this.mov_qword_ptr_rdi_rax = 0x5113c9n;
-                    this.ret = 0x42n;
-                    //this.syscall = 0x1f4dcc5n;
-
-                    //this.mov_qword_ptr_rdi_rax = 0x5153c9n;  
-                        
-                
-                    break;
                 case 'Pollux-U53-7-A':        // PS4 US 1.53
                     is_ps4 = true;
                     is_us = true;
