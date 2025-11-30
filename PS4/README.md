@@ -1,6 +1,6 @@
 # Netflix N Hack for PS4
 
-## **Currently only userland exploit. Lapse is WIP**
+## **Currently only userland+lapse exploit. Binloader is WIP**
 
 > [!NOTE]
 > The PS4 version requires very specific circumstances to work. Workarounds are included below.
