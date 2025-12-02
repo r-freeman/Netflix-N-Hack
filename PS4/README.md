@@ -84,6 +84,9 @@ Once complete, the exploit spawns a bin loader on port 9021.
 
 Now you can send any HEN payload of your choice.
 
+# Credits
+- HelloYunho for all the advise on porting lapse, and latest fw downgrade method 
+- c0w-ar for working primitives and ROP chain
 
 ---
 
