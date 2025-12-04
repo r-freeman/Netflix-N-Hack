@@ -70,7 +70,7 @@ Then simply open Netflix on your PS4.
 # Important Notes
 
 > [!NOTE]
-> If PS4 kernel panics, or lapse fails restart the console and try again.
+> If PS4 kernel panics, or lapse fails; restart the console and try again.
 >
 > if Netflix crashes, just restart Netflix
 
