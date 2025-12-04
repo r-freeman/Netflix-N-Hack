@@ -3,7 +3,7 @@
 // Loads and executes ELF binaries sent over socket after jailbreak is complete
 
 // Constants
-const BIN_LOADER_PORT = 9021;
+const BIN_LOADER_PORT = 9020;
 const MAX_PAYLOAD_SIZE = 4 * 1024 * 1024;  // 4MB max
 const READ_CHUNK = 32768;  // 32KB chunks for faster transfer
 
