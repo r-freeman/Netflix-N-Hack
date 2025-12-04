@@ -68,8 +68,8 @@ Then simply open Netflix on your PS4.
 (Exploit initialization takes ~30 seconds.)
 
 This will spawn the Remote JS payload server.
-Send payloads/lapse.js via netcat or any equivalent tool.
-followed by payloads/lapse/binloader.js
+Send `payloads/lapse_binloader.js` via netcat or any equivalent tool.
+
 
 # Important Notes
 
