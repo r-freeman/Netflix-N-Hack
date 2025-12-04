@@ -74,7 +74,7 @@ Then simply open Netflix on your PS4.
 >
 > if Netflix crashes, just restart Netflix
 
-Once complete, the exploit will look for a payload in `/data/payload.bin` if it is not found it will look on the root of a plugged in USB drive named `payload.bin` and will automatically copy it to `/data/payload.bin`.
+Once complete, the exploit will look for a payload in `/data/payload.bin` if it is not found it will look on the root of a plugged in USB drive for a file named `payload.bin` and will automatically copy it to `/data/payload.bin`.
 
 after initial exploit, USB is no longer needed. 
 
