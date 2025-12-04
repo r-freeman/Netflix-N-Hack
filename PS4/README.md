@@ -58,6 +58,19 @@ It will appear to download the newest version, but after install it should downg
 
 ## Exploit
 
+### Public Server
+
+> [!NOTE]
+> **Public Proxy Server**
+> **Address**: `172.105.156.37`
+> **Port**: `42069`
+
+Then simply open Netflix 
+
+
+### Host Locally
+
+
 ### Start MITM Proxy
 
 ```bash
