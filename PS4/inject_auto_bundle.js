@@ -1,4 +1,4 @@
-// Netflix PS4 Exploit
+I'm// Netflix PS4 Exploit
 // based on https://starlabs.sg/blog/2022/12-the-hole-new-world-how-a-small-leak-will-sink-a-great-browser-cve-2021-38003/
 // thanks to Gezines y2jb for advice and reference : https://github.com/Gezine/Y2JB/blob/main/download0/cache/splash_screen/aHR0cHM6Ly93d3cueW91dHViZS5jb20vdHY%3D/splash.html
 
@@ -4936,6 +4936,5 @@ bin_loader_main()
         logger.flush();
     }
 }
-ws.init("192.168.0.111", 1337, main);// uncomment this to enable WebSocket logging
-//main();
-
+//ws.init("192.168.0.111", 1337, main);// uncomment this to enable WebSocket logging
+main();
