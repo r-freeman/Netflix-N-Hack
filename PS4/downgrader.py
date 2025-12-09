@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# based on https://github.com/Ailyth99/RewindPS4
+
+
 from mitmproxy import http
 from mitmproxy.proxy.layers import tls
 import os
@@ -78,16 +82,20 @@ def request(flow: http.HTTPFlow) -> None:
         
         elif nflix_cusas[1] in flow.request.pretty_url and ".json" in flow.request.pretty_url:
             logger.info(f"[REDIRECT][CUSA00129] {flow.request.pretty_url}")
-            logger.info(f"        -> {US_redirect}")
-            flow.request.url = US_redirect
+            logger.info(f"        -> {US_REDIRECT}")
+            flow.request.url = US_REDIRECT
             
         elif nflix_cusas[2] in flow.request.pretty_url and ".json" in flow.request.pretty_url:
             logger.info(f"[REDIRECT][CUSA02988] {flow.request.pretty_url}")
             logger.info(f"        -> {JP_REDIRECT}")
             flow.request.url = JP_REDIRECT
             
-        elif ".pkg" in flow.request.pretty_url and (nflix_cusas[0] in flow.request.pretty_url or nflix_cusas[1] in flow.request.pretty_url or nflix_cusas[2] in flow.request.pretty_url):
-            pass
+        elif ".pkg" in flow.request.pretty_url:
+            if nflix_cusas[0] in flow.request.pretty_url or nflix_cusas[1] in flow.request.pretty_url or nflix_cusas[2] in flow.request.pretty_url:
+                flow.comment = "PKG ALLOWED"
+            else:
+                flow.comment = f"PKG BLOCKED - no matching CUSA"
+                pass
         else:
             flow.response = http.Response.make( 
                 200,

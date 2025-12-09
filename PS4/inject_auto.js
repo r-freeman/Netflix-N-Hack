@@ -1338,7 +1338,7 @@ function main () {
             syscall(SYSCALL.close, fd);  
         }
 
-        send_notification("Netflix-n-Hack Auto");
+        send_notification("ð\x9F¥³ð\x9F¥³ Netflix-n-Hack ð\x9F¥³ð\x9F¥³");
 
         function get_current_ip() {
             // Get interface count
@@ -1399,6 +1399,6 @@ function main () {
         logger.flush();
     }
 }
-ws.init("192.168.0.111", 1337, main);// uncomment this to enable WebSocket logging
-//main();
+//ws.init("192.168.0.111", 1337, main);// uncomment this to enable WebSocket logging
+main();
 

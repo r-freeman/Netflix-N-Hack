@@ -15,6 +15,8 @@ Before proceeding, ensure the following:
 
 2. **PS4 Firmware version must be between 8.00 and 12.02** (required for the Lapse exploit)
 
+
+Need help? Ask me on [Discord](https://discord.gg/QMGHzzW89V)
 ---
 
 ## Downgrading Netflix
@@ -24,8 +26,13 @@ Before proceeding, ensure the following:
 - mitmproxy
 - Internet access
 
+> [!Warning]
+> Downgrading is experimental and may not work for you. If you accidentally update to 1.59 you cannot downgrade with MITM. **Extended storage images are planned**
+
 > [!NOTE]
-> please make sure you do this correctly. Backup restore will not backup licenses. Downgrade at your own risk!
+> If your previous Netflix version is above 1.53. You will need an existing Jailbreak to fix the "Please update the application" notification.
+> FTP into /user/download/CUSA00XXX (whichever region you are in)
+and delete "download0_info.dat"
 
 ### Install & Run Downgrade Proxy
 ```bash
@@ -33,7 +40,7 @@ Before proceeding, ensure the following:
 pip install mitmproxy
 
 # Start the downgrade proxy
-mitmproxy -s downgrader.py --ssl-insecure
+mitmproxy -s downgrader.py --ssl-insecure --set stream_large_bodies=3m
 ```
 **Console Instructions**
 
@@ -50,13 +57,23 @@ On your PS4:
 3. Select **Check for Updates**
 
 
-
-It will appear to download the newest version, but after install it should downgrade to **1.53**.
-
-
 ---
 
 ## Exploit
+
+### Public Server
+
+Set your proxy in ps4 network settings to this:
+
+> [!NOTE]
+> **Address**: `172.105.156.37`
+> **Port**: `42069`
+
+Then simply open Netflix 
+
+
+### Host Locally
+
 
 ### Start MITM Proxy
 
@@ -64,24 +81,24 @@ It will appear to download the newest version, but after install it should downg
 mitmproxy -s proxy.py
 ```
 
+### Set your proxy in ps4 network settings to your local ip (machine running mitmproxy)
+
 Then simply open Netflix on your PS4.
 (Exploit initialization takes ~30 seconds.)
-
-This will spawn the Remote JS payload server.
-Send `payloads/lapse_binloader.js` via netcat or any equivalent tool.
-
 
 # Important Notes
 
 > [!NOTE]
-> You will not see any output while the exploit is executing.
-If the app crashes or the PS4 kernel panics, restart the console and try again.
+> If PS4 kernel panics, or lapse fails; restart the console and try again.
+>
+> if Netflix crashes, just restart Netflix
 
+Once complete, the exploit will look for a payload in `/data/payload.bin` if it is not found it will look on the root of a plugged in USB drive for a file named `payload.bin` and will automatically copy it to `/data/payload.bin`.
 
+after initial exploit, USB is no longer needed. 
 
-Once complete, the exploit spawns a bin loader on port 9021.
+if payload is not found on either the USB or `/data/payload.bin`, a binloader will spawn on port 9021 for you to send via netcat or equivalent
 
-Now you can send any HEN payload of your choice.
 
 # Credits
 - HelloYunho for all the advise on porting lapse, and latest fw downgrade method 
