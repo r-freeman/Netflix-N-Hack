@@ -49,6 +49,7 @@ def tls_clienthello(data: tls.ClientHelloData) -> None:
 def request(flow: http.HTTPFlow) -> None:
     """Handle HTTP/HTTPS requests after TLS handshake"""
     hostname = flow.request.pretty_host
+    proxyServerIP = flow.client_conn.sockname[0].encode("UTF-8")
     
     # Special handling for Netflix - corrupt the response
     if "netflix" in hostname:
@@ -76,7 +77,7 @@ def request(flow: http.HTTPFlow) -> None:
 
         try:
             with open(inject_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace(b"PLS_STOP_HARDCODING_IPS",proxyServerIP)
                 print(f"[+] Loaded {len(content)} bytes from inject.js")
                 flow.response = http.Response.make(
                     200,
@@ -98,7 +99,7 @@ def request(flow: http.HTTPFlow) -> None:
 
         try:
             with open(inject_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace("PLS_STOP_HARDCODING_IPS",proxyServerIP)
                 print(f"[+] Loaded {len(content)} bytes from lapse.js")
                 flow.response = http.Response.make(
                     200,
@@ -119,7 +120,7 @@ def request(flow: http.HTTPFlow) -> None:
 
         try:
             with open(inject_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace("PLS_STOP_HARDCODING_IPS",proxyServerIP)
                 print(f"[+] Loaded {len(content)} bytes from elf_loader.js")
                 flow.response = http.Response.make(
                     200,
@@ -140,7 +141,7 @@ def request(flow: http.HTTPFlow) -> None:
 
         try:
             with open(inject_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace("PLS_STOP_HARDCODING_IPS",proxyServerIP)
                 print(f"[+] Loaded {len(content)} bytes from elfldr.elf")
                 flow.response = http.Response.make(
                     200,
@@ -162,7 +163,7 @@ def request(flow: http.HTTPFlow) -> None:
 
         try:
             with open(inject_path, "rb") as f:
-                content = f.read()
+                content = f.read().replace("PLS_STOP_HARDCODING_IPS",proxyServerIP)
                 print(f"[+] Loaded {len(content)} bytes from inject_auto_bundle.js")
                 flow.response = http.Response.make(
                     200,
